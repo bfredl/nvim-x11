@@ -10,6 +10,6 @@ include_directories( ${CMAKE_CURRENT_BINARY_DIR} )
 
 add_library(nvimX11 MODULE src/nvimx11.c src/nvimx11.h)
 
-#target_link_libraries(test_cxx ${Boost_LIBRARIES})
+target_link_libraries(nvimX11 X11 Xt)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
