@@ -32,5 +32,10 @@ function! provider#clipboard#invoke(method, args) abort
     end
 
     return [data, regtype]
-  endif
+  elseif a:method == "set"
+    let [data, regtype, sel] = a:args
+    let str = {'_TYPE': v:msgpack_types['string'], '_VAL': data}
+    call luaeval("nvimX11.set(_A.sel, _A.str, _A.regtype)", l:)
+    return 1
+  end
 endfunction

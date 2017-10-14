@@ -401,7 +401,7 @@ void own_selection(int which) {
 }
 
 
-bool nvimx11_putsel(int name, int type, const char* data, size_t len) {
+bool nvimx11_setsel(int name, int type, const char* data, size_t len) {
   if (display == NULL && !nvimx11_open()) {
     return false;
   }

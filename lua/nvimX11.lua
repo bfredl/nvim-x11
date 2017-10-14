@@ -7,7 +7,7 @@ print(path)
 ffi.cdef[[
 int nvimx11_test(int x);
 char* nvimx11_getsel(int name, int* type, size_t* len);
-bool nvimx11_putsel(int name, int type, const char* data, size_t len);
+bool nvimx11_setsel(int name, int type, const char* data, size_t len);
 ]]
 libnvimX11 = ffi.load(path.."/build/libnvimX11.so")
 
@@ -25,11 +25,11 @@ local function get(sel)
   return str, typename
 end
 
-local function put(sel,data,typename)
-  if type(data) ~= "string" then
-    error("data must be string")
+local function set(sel,str,typename)
+  if type(str) ~= "string" then
+    error("strmust be string")
   end
-  libnvimX11.nvimx11_putsel(string.byte(sel,1), typeids[typename], data, string.len(data))
+  libnvimX11.nvimx11_setsel(string.byte(sel,1), typeids[typename], str, string.len(str))
 end
-return {get=get, put=put}
+return {get=get, set=set}
 
