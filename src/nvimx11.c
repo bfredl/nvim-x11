@@ -12,7 +12,7 @@
 #include <X11/StringDefs.h>
 
 typedef struct cbd {
-    char* val;
+    char *val;
     size_t len;
     int type; //FIXME do the enum on this branch
     bool done;
@@ -47,7 +47,7 @@ static cbd_t selections[2] = {0};
     X(UTF8_STRING) \
 
 
-char* atom_names[] = {
+char *atom_names[] = {
 #define X(name) #name ,
   LIST_OF_ATOMS
 #undef X
@@ -101,7 +101,7 @@ static void check_events(void) {
   }
 }
 
-static void poll_cb(uv_poll_t* handle, int status, int events) {
+static void poll_cb(uv_poll_t *handle, int status, int events) {
   if (status == 0 && (events & UV_READABLE)) {
     check_events();
   }
@@ -111,7 +111,7 @@ static bool nvimx11_open(void) {
   XtToolkitInitialize();
   app_context = XtCreateApplicationContext();
   int argc = 0;
-  char** argv = NULL;
+  char **argv = NULL;
   display = XtOpenDisplay (app_context, NULL, "nvim", "Nvim", NULL, 0, &argc, argv);
   if (display==NULL) {
     fprintf(stderr, "Can't open display: \n");
@@ -187,7 +187,7 @@ static void clip_x11_request_selection_cb(
     cbd->type = motion_type;
     --len;
 
-    char* enc = p;
+    char *enc = p;
     p += strlen(enc) + 1;
     len -= (size_t)(p - enc);
 
@@ -269,7 +269,7 @@ static Atom sel_atom(int which) {
 
 
 /// returns temporary reference
-char* nvimx11_getsel(int name, int* type, size_t* len) {
+const char *nvimx11_getsel(int name, int *type, size_t *len) {
   // TODO: the reciever cbd_t needs to be distinct, probably one per selection also
   static cbd_t cbd;
   if (display == NULL && !nvimx11_open()) {
@@ -309,7 +309,7 @@ static Boolean convert_selection_cb(
     Atom *type,
     XtPointer *value,
     unsigned long *length,
-    int  *format)
+    int *format)
 {
   static const char utf8[] = "utf-8";
   const size_t utf8len = 5;
@@ -401,7 +401,7 @@ void own_selection(int which) {
 }
 
 
-bool nvimx11_setsel(int name, int type, const char* data, size_t len) {
+bool nvimx11_setsel(int name, int type, const char *data, size_t len) {
   if (display == NULL && !nvimx11_open()) {
     return false;
   }

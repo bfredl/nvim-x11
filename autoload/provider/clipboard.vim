@@ -1,8 +1,6 @@
-
 let g:nvimx11_path =  expand( '<sfile>:p:h:h:h' )
-lua <<EOT
- nvimX11 = require('nvimX11')
-EOT
+
+lua nvimX11 = require('nvimX11')
 
 function! provider#clipboard#Call(method, args) abort
   if get(s:, 'here', v:false)  " Clipboard provider must not recurse. #7184
