@@ -2,19 +2,18 @@
 local ffi = require("ffi")
 
 local path = vim.api.nvim_get_var("nvimx11_path")
-print(path)
 
 ffi.cdef[[
 int nvimx11_test(int x);
 char* nvimx11_getsel(int name, int* type, size_t* len);
 bool nvimx11_setsel(int name, int type, const char* data, size_t len);
 ]]
-libnvimX11 = ffi.load(path.."/build/libnvimX11.so")
+local libnvimX11 = ffi.load(path.."/build/libnvimX11.so")
 
-seltype = ffi.new("int[1]")
-selsize = ffi.new("size_t[1]")
+local seltype = ffi.new("int[1]")
+local selsize = ffi.new("size_t[1]")
 --print(libnvimX11.nvimx11_test(3))
---
+
 local typenames = {[0] = "v", [1] = "V", [2] = "b"}
 local typeids= {v=0,V=1,b=2}
 
