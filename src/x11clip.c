@@ -361,8 +361,7 @@ static void lose_ownership_cb(Widget w, Atom *sel_atom)
 }
 
 
-/// takes ownership of "data"
-bool x11clip_set(int name, int type, char* data, size_t len) {
+bool x11clip_set(int name, int type, const char* data, size_t len) {
   if (display == NULL && !x11clip_open()) {
     return NULL;
   }
@@ -370,9 +369,9 @@ bool x11clip_set(int name, int type, char* data, size_t len) {
   cbd_t *sel_data = &selections[which];
   sel_data->type = type;
   if (sel_data->val != NULL) {
-    xfree(sel_data->val);
+    free(sel_data->val);
   }
-  sel_data->val = data;
+  sel_data->val = ;
   sel_data->len = len;
   if (!sel_data->owned) {
     own_selection(which);

@@ -61,12 +61,53 @@ LIST_OF_ATOMS
 const int n_atoms = 0 LIST_OF_ATOMS;
 #undef X
 
+#include <uv.h>
+// TODO(bfredl): such hack, very danger!
+// use a thread instead? or nvim_add_poll() ?
+extern uv_loop_t main_loop;
+
+// TODO: FIXME
+extern void *xmemdupz(const void*, size_t len);
+extern void xfree(void*);
+
+static uv_poll_t poll_handle;
 
 int nvimx11_test(int x) {
     return 4*x;
 }
 
-static bool x11clip_open(void) {
+static void check_events(void) {
+  XEvent event;
+
+  while (true) {
+    XtInputMask mask = XtAppPending(app_context);
+
+    if (mask == 0) {
+      break;
+    }
+
+    // I think this can be collapsed to one branch
+    if (mask & XtIMXEvent)
+    {
+      /* There is an event to process. */
+      XtAppNextEvent(app_context, &event);
+      XtDispatchEvent(&event);
+    }
+    else
+    {
+      /* There is something else than an event to process. */
+      XtAppProcessEvent(app_context, mask);
+    }
+  }
+}
+
+static void poll_cb(uv_poll_t* handle, int status, int events) {
+  if (status == 0 && (events & UV_READABLE)) {
+    check_events();
+  }
+}
+
+static bool nvimx11_open(void) {
   XtToolkitInitialize();
   app_context = XtCreateApplicationContext();
   int argc = 0;
@@ -108,8 +149,14 @@ static bool x11clip_open(void) {
 #undef X
 
   int fd = XConnectionNumber(display);
+
+
+  uv_poll_init(&main_loop, &poll_handle, fd);
+  uv_poll_start(&poll_handle, UV_READABLE, poll_cb);
+
   return true;
 }
+
 static void clip_x11_request_selection_cb(
     Widget w,
     XtPointer userdata,
@@ -157,7 +204,6 @@ static void clip_x11_request_selection_cb(
     goto cleanup_return;
   }
 
-  extern void * xmemdupz(const void*, size_t len);
   cbd->val = xmemdupz(p, len);
   cbd->len = len; // exclusive NUL
 
@@ -226,7 +272,7 @@ static Atom sel_atom(int which) {
 char* nvimx11_getsel(int name, int* type, size_t* len) {
   // TODO: the reciever cbd_t needs to be distinct, probably one per selection also
   static cbd_t cbd;
-  if (display == NULL && !x11clip_open()) {
+  if (display == NULL && !nvimx11_open()) {
     return NULL;
   }
   int which = (name == '*') ? 1 : 0;
@@ -256,4 +302,121 @@ char* nvimx11_getsel(int name, int* type, size_t* len) {
   return NULL;
 }
 
+static Boolean convert_selection_cb(
+    Widget w,
+    Atom *sel_atom,
+    Atom *target,
+    Atom *type,
+    XtPointer *value,
+    unsigned long *length,
+    int  *format)
+{
+  static const char utf8[] = "utf-8";
+  const size_t utf8len = 5;
+
+  char	*result;
+
+  int which = (*sel_atom == XA_PRIMARY);
+  cbd_t *cbd = &selections[which];
+
+  if (!cbd->owned)
+    return false; /* Shouldn't ever happen */
+
+  /* requestor wants to know what target types we support */
+  if (*target == TARGETS_ATOM)
+  {
+    Atom *array;
+
+    if ((array = (Atom *)XtMalloc((unsigned)(sizeof(Atom) * 6))) == NULL) {
+      return False;
+    }
+    *value = (XtPointer)array;
+    unsigned int i = 0;
+    array[i++] = TARGETS_ATOM;
+    array[i++] = _VIMENC_TEXT_ATOM;
+    array[i++] = UTF8_STRING_ATOM;
+    array[i++] = XA_STRING;
+    array[i++] = TEXT_ATOM;
+    *type = XA_ATOM;
+    /* This used to be: *format = sizeof(Atom) * 8; but that caused
+     * crashes on 64 bit machines. (Peter Derr) */
+    *format = 32;
+    *length = i;
+    return true;
+  }
+
+  if (*target != XA_STRING
+      && *target != _VIMENC_TEXT_ATOM
+      && *target != UTF8_STRING_ATOM
+      && *target != TEXT_ATOM) {
+    return False;
+  }
+
+  *format = 8;   /* 8 bits per char */
+  *length = cbd->len;
+
+  /* Our own format with encoding: motion 'encoding' NUL text */
+  if (*target == _VIMENC_TEXT_ATOM) {
+    *length += utf8len + 2;
+  }
+
+  *value = XtMalloc((Cardinal)*length);
+  result = (char *)*value;
+  if (result == NULL) {
+    return False;
+  }
+
+  if (*target == XA_STRING || *target == UTF8_STRING_ATOM || *target == TEXT_ATOM) {
+    memmove(result, cbd->val, (size_t)(*length));
+    *type = *target;
+  }
+
+  else if (*target == _VIMENC_TEXT_ATOM)
+  {
+    result[0] = (char)cbd->type;
+    strcpy(result + 1, utf8);
+    memmove(result + utf8len + 2, cbd->val, cbd->len);
+    *type = _VIMENC_TEXT_ATOM;
+  }
+
+    return True;
+}
+
+static void lose_ownership_cb(Widget w, Atom *sel_atom)
+{
+  int which = (*sel_atom == XA_PRIMARY);
+  // NB: if lua implements breakcheck this callback might get invoked when
+  // nvimx11_getsel just have handed out the data pointer, but before
+  // lua has copied it to a private buffer, so we can't free it here!
+  selections[which].owned = false;
+}
+
+void own_selection(int which) {
+  if (XtOwnSelection(shell, sel_atom(which),
+        XtLastTimestampProcessed(display),
+        convert_selection_cb, lose_ownership_cb,
+        NULL)) {
+    selections[which].owned = true;
+  }
+}
+
+
+bool nvimx11_putsel(int name, int type, const char* data, size_t len) {
+  if (display == NULL && !nvimx11_open()) {
+    return false;
+  }
+  int which = (name == '*') ? 1 : 0;
+  cbd_t *sel_data = &selections[which];
+  sel_data->type = type;
+  // TODO: reuse the buffer, or make lua code guarantee the lifetime of data
+  if (sel_data->val != NULL) {
+    xfree(sel_data->val);
+  }
+  sel_data->val = xmemdupz(data,len);
+  sel_data->len = len;
+  if (!sel_data->owned) {
+    own_selection(which);
+  }
+  return true;
+}
 
